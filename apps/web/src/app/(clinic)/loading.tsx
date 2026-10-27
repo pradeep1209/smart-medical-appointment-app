@@ -1,0 +1,1 @@
+export default function LoadingPage() { return <section aria-busy="true" aria-label="Loading clinic information"><header className="page-heading"><h1>Loading clinic information…</h1></header><div className="loading-lines"><span/><span/><span/></div></section>; }

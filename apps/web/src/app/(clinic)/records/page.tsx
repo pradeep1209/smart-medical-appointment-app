@@ -1,0 +1,4 @@
+import { clinicContext,serverApi } from '@/lib/server-api';
+import { ExperienceWorkspace,type ExperienceData } from '@/components/experience-workspace';
+export const metadata={title:'Records & tools'};
+export default async function RecordsPage({searchParams}:{searchParams:Promise<{appointmentId?:string}>}){const {membership}=await clinicContext();const {appointmentId}=await searchParams;const data=await serverApi<ExperienceData>(`/experience?clinicId=${membership.clinicId}`);return <><header className="page-heading"><div><h1>{membership.role==='ADMIN'?'Clinic details':membership.role==='DOCTOR'?'Visit records':'Appointment documents'}</h1><p>{membership.role==='DOCTOR'?'Consultation summaries, prescription documents and information shared by patients.':'Clinic identity and printable appointment records.'}</p></div></header><ExperienceWorkspace initial={data} initialVisit={appointmentId}/></>;}

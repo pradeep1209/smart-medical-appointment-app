@@ -1,0 +1,10 @@
+<resources>
+    <style name="Theme.CareSlot" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">@font/dm_sans</item>
+        <item name="android:colorAccent">@color/care_teal</item>
+        <item name="android:windowBackground">@color/care_background</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:colorControlActivated">@color/care_teal</item>
+    </style>
+</resources>

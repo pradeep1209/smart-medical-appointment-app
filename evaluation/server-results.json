@@ -1,0 +1,91 @@
+{
+  "source": "Independent synthetic generator only; not real-patient validation.",
+  "seed": 20261025,
+  "rows": 4000,
+  "reminder_feature": false,
+  "model": "synthetic-logistic-v1",
+  "model_sha256": "a8ca401fe54a21bae880f20ab4026ec20bb1037b0dcf9084246785b92c4d4836",
+  "logistic": {
+    "auc": 0.6107688502415459,
+    "brier": 0.19658129253619377,
+    "log_loss": 0.5804828074469062
+  },
+  "constant_baseline": {
+    "auc": 0.5,
+    "brier": 0.2035391059027778,
+    "log_loss": 0.59778039569973
+  },
+  "baseline_basis": "Constant overall synthetic training no-show rate, including both original reminder states.",
+  "calibration": [
+    {
+      "lower": 0.0,
+      "upper": 0.1,
+      "count": 4,
+      "predicted_no_show": 0.09450751196647099,
+      "observed_no_show": 0.0
+    },
+    {
+      "lower": 0.1,
+      "upper": 0.2,
+      "count": 985,
+      "predicted_no_show": 0.16294708183785442,
+      "observed_no_show": 0.1918781725888325
+    },
+    {
+      "lower": 0.2,
+      "upper": 0.30000000000000004,
+      "count": 1373,
+      "predicted_no_show": 0.24926776398035247,
+      "observed_no_show": 0.25127458120903134
+    },
+    {
+      "lower": 0.30000000000000004,
+      "upper": 0.4,
+      "count": 1050,
+      "predicted_no_show": 0.34842586007323467,
+      "observed_no_show": 0.3333333333333333
+    },
+    {
+      "lower": 0.4,
+      "upper": 0.5,
+      "count": 499,
+      "predicted_no_show": 0.4410270043608336,
+      "observed_no_show": 0.40480961923847697
+    },
+    {
+      "lower": 0.5,
+      "upper": 0.6,
+      "count": 86,
+      "predicted_no_show": 0.5327549931137491,
+      "observed_no_show": 0.4418604651162791
+    },
+    {
+      "lower": 0.6000000000000001,
+      "upper": 0.7000000000000001,
+      "count": 3,
+      "predicted_no_show": 0.6167281687275797,
+      "observed_no_show": 0.3333333333333333
+    },
+    {
+      "lower": 0.7000000000000001,
+      "upper": 0.8,
+      "count": 0,
+      "predicted_no_show": null,
+      "observed_no_show": null
+    },
+    {
+      "lower": 0.8,
+      "upper": 0.9,
+      "count": 0,
+      "predicted_no_show": null,
+      "observed_no_show": null
+    },
+    {
+      "lower": 0.9,
+      "upper": 1.0,
+      "count": 0,
+      "predicted_no_show": null,
+      "observed_no_show": null
+    }
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "source": "Independent fictional records drawn from the documented synthetic generator; no real-patient validation.",
+  "seed": 20261015,
+  "rows": 4000,
+  "model": "synthetic-logistic-v1",
+  "logistic": {
+    "auc": 0.654903379092421,
+    "brier": 0.1696241457425554,
+    "log_loss": 0.5172822419787967
+  },
+  "constant_baseline": {
+    "auc": 0.5,
+    "brier": 0.17947118923611116,
+    "log_loss": 0.5446187406498084
+  },
+  "calibration": [
+    {
+      "bin": "0.0-0.1",
+      "count": 132,
+      "predicted": 0.0878762190905056,
+      "observed": 0.07575757575757576
+    },
+    {
+      "bin": "0.1-0.2",
+      "count": 1450,
+      "predicted": 0.15376444120817795,
+      "observed": 0.15310344827586206
+    },
+    {
+      "bin": "0.2-0.3",
+      "count": 1307,
+      "predicted": 0.2483462511449005,
+      "observed": 0.23565416985462892
+    },
+    {
+      "bin": "0.3-0.4",
+      "count": 792,
+      "predicted": 0.34460744213346817,
+      "observed": 0.3194444444444444
+    },
+    {
+      "bin": "0.4-0.5",
+      "count": 281,
+      "predicted": 0.43982744322824585,
+      "observed": 0.43416370106761565
+    },
+    {
+      "bin": "0.5-0.6",
+      "count": 36,
+      "predicted": 0.5352112843648338,
+      "observed": 0.5833333333333334
+    },
+    {
+      "bin": "0.6-0.7",
+      "count": 2,
+      "predicted": 0.6248418640219524,
+      "observed": 0.5
+    }
+  ],
+  "simulation": {
+    "sessions": 500,
+    "assumptions": "18 candidates, 12 thirty-minute slots, independent attendance from synthetic generator, shared U(20,40) minute service durations; arrivals at booked slot start. Order-preserving greedy heuristic, not ILP.",
+    "policies": {
+      "standard": {
+        "booked": 12.0,
+        "attended": 9.198,
+        "unused_slots": 2.802,
+        "collision_slots": 0.0,
+        "mean_wait_minutes": 3.502510534667916,
+        "overtime_minutes": 4.771967818374183,
+        "busy_capacity_fraction": 0.7540964524613943
+      },
+      "prediction_assisted": {
+        "booked": 12.71,
+        "attended": 9.656,
+        "unused_slots": 2.588,
+        "collision_slots": 0.244,
+        "mean_wait_minutes": 6.099686971322194,
+        "overtime_minutes": 6.799946819643753,
+        "busy_capacity_fraction": 0.7864495480544386
+      }
+    }
+  }
+}

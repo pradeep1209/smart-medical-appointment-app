@@ -1,0 +1,30 @@
+[
+  {
+    "leadDays": 0,
+    "priorAppointments": 0,
+    "priorMissed": 0,
+    "reminderPlanned": false,
+    "expectedNoShow": 0.1859140281196037
+  },
+  {
+    "leadDays": 30,
+    "priorAppointments": 10,
+    "priorMissed": 5,
+    "reminderPlanned": false,
+    "expectedNoShow": 0.35309457428842533
+  },
+  {
+    "leadDays": 60,
+    "priorAppointments": 20,
+    "priorMissed": 20,
+    "reminderPlanned": true,
+    "expectedNoShow": 0.5931452665804392
+  },
+  {
+    "leadDays": 1,
+    "priorAppointments": 20,
+    "priorMissed": 0,
+    "reminderPlanned": false,
+    "expectedNoShow": 0.08182672780996071
+  }
+]

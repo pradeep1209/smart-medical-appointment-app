@@ -1,0 +1,46 @@
+{
+  "version": "synthetic-logistic-v1",
+  "training_data": "synthetic",
+  "positive_class": "no_show",
+  "features": [
+    "lead_days",
+    "smoothed_prior_noshow_rate",
+    "prior_appointments",
+    "reminder_planned"
+  ],
+  "mean": [
+    29.823541666666667,
+    0.2439693126807379,
+    9.861458333333333,
+    0.49854166666666666
+  ],
+  "scale": [
+    17.637870831157496,
+    0.09269392208729178,
+    5.9928580721775955,
+    0.49999787325936423
+  ],
+  "weights": [
+    0.4530509602528738,
+    0.1914846993173638,
+    -0.1607036515747184,
+    -0.22110029826091587
+  ],
+  "intercept": -1.208084235749421,
+  "training_rows": 4800,
+  "holdout_rows": 1200,
+  "training_no_show_rate": 0.24395833333333333,
+  "synthetic_holdout_auc": 0.6564235018819607,
+  "synthetic_holdout_brier": 0.1788123310778676,
+  "history_smoothing": "(prior_missed + 1) / (prior_appointments + 4)",
+  "feature_bounds": {
+    "lead_days": [
+      0,
+      60
+    ],
+    "prior_appointments": [
+      0,
+      20
+    ]
+  }
+}

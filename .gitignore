@@ -1,0 +1,51 @@
+# Local credentials and machine configuration
+.env
+.env.*
+!.env.example
+/.local/
+local.properties
+*.jks
+*.keystore
+keystore.properties
+*.pem
+*.key
+
+# Android and Kotlin caches / generated output
+.gradle/
+.gradle-user/
+.kotlin/
+build/
+*.apk
+*.aab
+*.apks
+*.hprof
+.cxx/
+.externalNativeBuild/
+
+# JavaScript dependencies / generated output
+node_modules/
+.next/
+dist/
+coverage/
+*.tsbuildinfo
+*.log
+
+# Python caches and virtual environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Local development tools and test evidence
+.idea/
+/.taste-skill/
+/tmp/
+/output/
+/qa/
+
+# Operating system files and project archives
+.DS_Store
+Thumbs.db
+Desktop.ini
+/*.zip

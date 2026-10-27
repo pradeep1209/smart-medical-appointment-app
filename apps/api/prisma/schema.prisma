@@ -1,0 +1,395 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+}
+enum StaffRole {
+  ADMIN
+  DOCTOR
+  RECEPTIONIST
+}
+enum AccountStatus {
+  ACTIVE
+  DISABLED
+}
+enum SessionClient {
+  WEB
+  MOBILE
+}
+enum AppointmentStatus {
+  BOOKED
+  CANCELLED
+  ATTENDED
+  MISSED
+}
+enum RefillStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+model User {
+  id           String        @id @default(uuid()) @db.Uuid
+  email        String        @unique @db.VarChar(254)
+  displayName  String        @db.VarChar(100)
+  passwordHash String
+  status       AccountStatus @default(ACTIVE)
+  createdAt    DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime      @updatedAt @db.Timestamptz(3)
+  patient      PatientProfile?
+  memberships  Membership[]
+  sessions     AuthSession[]
+  sentInvites  StaffInvitation[]
+  auditEvents  AuditEvent[]
+  visitEvents  AppointmentEvent[]
+  issuedPrescriptions Prescription[]
+  reviewedRefills RefillRequest[]
+  recoveryCodes AccountRecovery[]
+  notices InboxNotice[]
+  medicationPlans MedicationPlan[]
+}
+model AccountRecovery {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  issuerId String @db.Uuid
+  verificationNote String @db.VarChar(500)
+  tokenHash String @unique @db.Char(64)
+  expiresAt DateTime @db.Timestamptz(3)
+  usedAt DateTime? @db.Timestamptz(3)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  @@index([userId, usedAt])
+}
+model Clinic {
+  id          String   @id @default(uuid()) @db.Uuid
+  slug        String   @unique @db.VarChar(80)
+  name        String   @db.VarChar(120)
+  timezone    String   @default("Asia/Kolkata") @db.VarChar(80)
+  address     String @default("") @db.VarChar(500)
+  phone       String @default("") @db.VarChar(40)
+  contactEmail String @default("") @db.VarChar(254)
+  logoData    String?
+  profileVersion Int @default(0)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  memberships Membership[]
+  invitations StaffInvitation[]
+  auditEvents AuditEvent[]
+  patients    ClinicPatient[]
+  appointments Appointment[]
+}
+model PatientProfile {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @unique @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  clinics   ClinicPatient[]
+  appointments Appointment[]
+  phone String @default("") @db.VarChar(40)
+  dateOfBirth String? @db.VarChar(10)
+  allergies String @default("") @db.VarChar(1000)
+  healthNotes String @default("") @db.VarChar(2000)
+  profileVersion Int @default(0)
+  documents HealthDocument[]
+}
+model ClinicPatient {
+  clinicId  String @db.Uuid
+  patientId String @db.Uuid
+  clinic    Clinic @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patient   PatientProfile @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  @@id([clinicId, patientId])
+}
+model Membership {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  clinicId  String    @db.Uuid
+  role      StaffRole
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  clinic    Clinic    @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  doctor    DoctorProfile?
+  @@unique([userId, clinicId])
+  @@index([clinicId, active])
+}
+model DoctorProfile {
+  id                  String     @id @default(uuid()) @db.Uuid
+  membershipId        String     @unique @db.Uuid
+  specialty           String     @db.VarChar(100)
+  consultationMinutes Int        @default(30)
+  scheduleVersion     Int        @default(0)
+  qualifications String @default("") @db.VarChar(200)
+  registrationNumber String @default("") @db.VarChar(100)
+  profileVersion Int @default(0)
+  membership          Membership @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  workingDays         WorkingDay[]
+  blockedPeriods      BlockedPeriod[]
+  appointments        Appointment[]
+  documentGrants DocumentGrant[]
+}
+model Appointment {
+  id             String @id @default(uuid()) @db.Uuid
+  clinicId       String @db.Uuid
+  doctorId       String @db.Uuid
+  patientId      String @db.Uuid
+  requestKey     String @db.Uuid
+  requestedStart DateTime @db.Timestamptz(3)
+  startsAt       DateTime @db.Timestamptz(3)
+  endsAt         DateTime @db.Timestamptz(3)
+  timezone       String @db.VarChar(80)
+  status         AppointmentStatus @default(BOOKED)
+  version        Int @default(0)
+  needsReview    Boolean @default(false)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+  clinic         Clinic @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  doctor         DoctorProfile @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  patient        PatientProfile @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  events         AppointmentEvent[]
+  prescriptions  Prescription[]
+  attendanceSnapshots AttendanceSnapshot[]
+  summary VisitSummary?
+  documentGrants DocumentGrant[]
+  @@unique([patientId, requestKey])
+  @@index([doctorId, status, startsAt])
+  @@index([patientId, status, startsAt])
+  @@index([clinicId, startsAt])
+}
+model AttendanceSnapshot {
+  id String @id @default(uuid()) @db.Uuid
+  appointmentId String @db.Uuid
+  appointmentVersion Int
+  startsAt DateTime @db.Timestamptz(3)
+  asOf DateTime @db.Timestamptz(3)
+  status String @db.VarChar(20)
+  modelVersion String? @db.VarChar(100)
+  modelSha256 String? @db.Char(64)
+  noShowProbability Float?
+  features Json
+  historyIds String[] @db.Uuid
+  historyScope String @db.VarChar(50)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  @@unique([appointmentId, appointmentVersion])
+  @@index([appointmentId, createdAt])
+}
+model Prescription {
+  id            String @id @default(uuid()) @db.Uuid
+  appointmentId String @db.Uuid
+  issuerId      String @db.Uuid
+  requestKey    String @unique @db.Uuid
+  renewalOfId   String? @unique @db.Uuid
+  notes         String @default("") @db.VarChar(1000)
+  issuedAt      DateTime @default(now()) @db.Timestamptz(3)
+  documentNumber String? @unique @db.VarChar(40)
+  verificationToken String? @unique @db.VarChar(64)
+  issuedSnapshot Json?
+  documentStatus String @default("ACTIVE") @db.VarChar(20)
+  revokedAt DateTime? @db.Timestamptz(3)
+  changeReason String @default("") @db.VarChar(500)
+  replacesId String? @unique @db.Uuid
+  replaces Prescription? @relation("PrescriptionReplacement", fields: [replacesId], references: [id], onDelete: Restrict)
+  replacement Prescription? @relation("PrescriptionReplacement")
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  issuer        User @relation(fields: [issuerId], references: [id], onDelete: Restrict)
+  renewalOf     Prescription? @relation("PrescriptionRenewal", fields: [renewalOfId], references: [id], onDelete: Restrict)
+  renewal       Prescription? @relation("PrescriptionRenewal")
+  medicines     PrescriptionMedicine[]
+  refillRequests RefillRequest[] @relation("RefillSource")
+  issuedForRefill RefillRequest? @relation("RefillRenewal")
+  @@index([appointmentId, issuedAt])
+}
+model PrescriptionMedicine {
+  id             String @id @default(uuid()) @db.Uuid
+  prescriptionId String @db.Uuid
+  position       Int
+  name           String @db.VarChar(120)
+  dose           String @db.VarChar(100)
+  frequency      String @db.VarChar(160)
+  duration       String @db.VarChar(100)
+  instructions   String @default("") @db.VarChar(500)
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Restrict)
+  medicationPlans MedicationPlan[]
+  @@unique([prescriptionId, position])
+}
+model RefillRequest {
+  id             String @id @default(uuid()) @db.Uuid
+  prescriptionId String @db.Uuid
+  requestKey     String @db.Uuid
+  patientNote    String @db.VarChar(1000)
+  status         RefillStatus @default(PENDING)
+  version        Int @default(0)
+  requestedAt    DateTime @default(now()) @db.Timestamptz(3)
+  reviewedAt     DateTime? @db.Timestamptz(3)
+  reviewerId     String? @db.Uuid
+  reviewNote     String? @db.VarChar(1000)
+  renewalId      String? @unique @db.Uuid
+  prescription   Prescription @relation("RefillSource", fields: [prescriptionId], references: [id], onDelete: Restrict)
+  reviewer       User? @relation(fields: [reviewerId], references: [id], onDelete: Restrict)
+  renewal        Prescription? @relation("RefillRenewal", fields: [renewalId], references: [id], onDelete: Restrict)
+  @@unique([prescriptionId, requestKey])
+  @@index([status, requestedAt])
+}
+model AppointmentEvent {
+  id            String @id @default(uuid()) @db.Uuid
+  appointmentId String @db.Uuid
+  actorId       String @db.Uuid
+  action        String @db.VarChar(40)
+  actorRole     String? @db.VarChar(24)
+  actorDisplayName String? @db.VarChar(100)
+  fromStartsAt  DateTime? @db.Timestamptz(3)
+  fromEndsAt    DateTime? @db.Timestamptz(3)
+  toStartsAt    DateTime @db.Timestamptz(3)
+  toEndsAt      DateTime @db.Timestamptz(3)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  actor         User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  @@index([appointmentId, createdAt])
+}
+model WorkingDay {
+  id          String @id @default(uuid()) @db.Uuid
+  doctorId    String @db.Uuid
+  weekday     Int
+  startMinute Int
+  endMinute   Int
+  doctor      DoctorProfile @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  @@unique([doctorId, weekday])
+}
+model BlockedPeriod {
+  id        String @id @default(uuid()) @db.Uuid
+  doctorId  String @db.Uuid
+  startsAt  DateTime @db.Timestamptz(3)
+  endsAt    DateTime @db.Timestamptz(3)
+  reason    String @db.VarChar(160)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  doctor    DoctorProfile @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  @@index([doctorId, startsAt])
+}
+model AuthSession {
+  id            String        @id @default(uuid()) @db.Uuid
+  userId        String        @db.Uuid
+  client        SessionClient
+  tokenHash     String        @unique @db.Char(64)
+  csrfHash      String?       @db.Char(64)
+  previousTokenHash String?   @db.Char(64)
+  generation    Int           @default(0)
+  expiresAt     DateTime      @db.Timestamptz(3)
+  revokedAt     DateTime?     @db.Timestamptz(3)
+  createdAt     DateTime      @default(now()) @db.Timestamptz(3)
+  user          User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+}
+model StaffInvitation {
+  id          String    @id @default(uuid()) @db.Uuid
+  clinicId    String    @db.Uuid
+  invitedById String    @db.Uuid
+  email       String    @db.VarChar(254)
+  displayName String    @db.VarChar(100)
+  role        StaffRole
+  specialty   String?   @db.VarChar(100)
+  tokenHash   String    @unique @db.Char(64)
+  expiresAt   DateTime  @db.Timestamptz(3)
+  acceptedAt  DateTime? @db.Timestamptz(3)
+  revokedAt   DateTime? @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  clinic      Clinic    @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  invitedBy   User      @relation(fields: [invitedById], references: [id], onDelete: Restrict)
+  @@index([clinicId, createdAt])
+}
+model AuditEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  actorId   String   @db.Uuid
+  clinicId  String?  @db.Uuid
+  action    String   @db.VarChar(80)
+  subjectId String   @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  actor     User     @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  clinic    Clinic?  @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  @@index([clinicId, createdAt])
+}
+
+model VisitSummary {
+  id String @id @default(uuid()) @db.Uuid
+  appointmentId String @unique @db.Uuid
+  issuerId String @db.Uuid
+  summary String @default("") @db.VarChar(4000)
+  instructions String @default("") @db.VarChar(4000)
+  followUpDate String? @db.VarChar(10)
+  followUpInstructions String @default("") @db.VarChar(1000)
+  issuedAt DateTime? @db.Timestamptz(3)
+  issuedSnapshot Json?
+  version Int @default(0)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+}
+
+model HealthDocument {
+  id String @id @default(uuid()) @db.Uuid
+  patientId String @db.Uuid
+  title String @db.VarChar(120)
+  filename String @db.VarChar(160)
+  mime String @db.VarChar(80)
+  size Int
+  sha256 String @db.Char(64)
+  data Bytes?
+  uploadedAt DateTime @default(now()) @db.Timestamptz(3)
+  deletedAt DateTime? @db.Timestamptz(3)
+  patient PatientProfile @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  grants DocumentGrant[]
+  @@index([patientId, uploadedAt])
+}
+
+model DocumentGrant {
+  id String @id @default(uuid()) @db.Uuid
+  documentId String @db.Uuid
+  doctorId String @db.Uuid
+  appointmentId String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  expiresAt DateTime @db.Timestamptz(3)
+  revokedAt DateTime? @db.Timestamptz(3)
+  document HealthDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  doctor DoctorProfile @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  @@unique([documentId, appointmentId])
+}
+
+model InboxNotice {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  clinicId String? @db.Uuid
+  title String @db.VarChar(120)
+  body String @db.VarChar(500)
+  targetType String @db.VarChar(40)
+  targetId String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  readAt DateTime? @db.Timestamptz(3)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, createdAt])
+}
+
+model MedicationPlan {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  medicineId String @db.Uuid
+  times Json
+  timezone String @db.VarChar(80)
+  startDate String @db.VarChar(10)
+  endDate String @db.VarChar(10)
+  enabled Boolean @default(true)
+  version Int @default(0)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  medicine PrescriptionMedicine @relation(fields: [medicineId], references: [id], onDelete: Restrict)
+  logs DoseLog[]
+  @@unique([userId, medicineId])
+}
+
+model DoseLog {
+  id String @id @default(uuid()) @db.Uuid
+  planId String @db.Uuid
+  scheduledAt DateTime @db.Timestamptz(3)
+  status String @db.VarChar(12)
+  recordedAt DateTime @default(now()) @db.Timestamptz(3)
+  plan MedicationPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  @@unique([planId, scheduledAt])
+}

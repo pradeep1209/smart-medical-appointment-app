@@ -1,0 +1,65 @@
+require('dotenv').config({ quiet: true });
+const { PrismaClient } = require('@prisma/client');
+const { PrismaPg } = require('@prisma/adapter-pg');
+const { JwtService } = require('@nestjs/jwt');
+const { AuthService, userInclude } = require('../apps/api/dist/auth.service');
+const { AccountController, AccessController, RecoveryController } = require('../apps/api/dist/account.controller');
+const { randomUUID } = require('node:crypto');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
+const auth = new AuthService(db, new JwtService({ secret: process.env.JWT_SECRET }));
+const accounts = new AccountController(db, auth), access = new AccessController(db), recovery = new RecoveryController(db, auth);
+const output = 'qa/shared/accounts-sync';
+async function run() {
+  await auth.onModuleInit();
+  const clinic = await db.clinic.create({ data: { slug: `qa-accounts-${randomUUID()}`, name: 'QA Accounts Clinic' } });
+  const users = [], checks = []; const password = 'Fictional QA password 2026!';
+  const make = async (role, name) => { const u = await db.user.create({ data: { email: `accounts-${randomUUID()}@careslot-qa.invalid`, displayName: name, passwordHash: await auth.hash(password), ...(role ? { memberships: { create: { clinicId: clinic.id, role, ...(role === 'DOCTOR' ? { doctor: { create: { specialty: 'QA' } } } : {}) } } } : { patient: { create: { clinics: { create: { clinicId: clinic.id } } } } }) }, include: userInclude }); users.push(u.id); return u; };
+  const req = (u, client = u.patient ? 'MOBILE' : 'WEB', sessionId = randomUUID()) => ({ actor: { user: u, client, sessionId } });
+  const expect = n => e => e.getStatus?.() === n;
+  try {
+    const admin = await make('ADMIN', 'QA Admin'), doctor = await make('DOCTOR', 'QA Doctor'), reception = await make('RECEPTIONIST', 'QA Reception'), patient = await make(null, 'QA Patient');
+    const a = req(admin), d = req(doctor), p = req(patient);
+    assert.equal((await accounts.profile(p, { displayName: '  QA Patient Renamed  ' })).user.displayName, 'QA Patient Renamed');
+    await assert.rejects(() => accounts.profile(p, { displayName: '  ' }), expect(400)); checks.push('Profile trims/validates name and updates only authenticated user');
+    const one = await auth.mobileLogin({ email: patient.email, password }), two = await auth.mobileLogin({ email: patient.email, password });
+    const actor = await auth.authenticate(one.accessToken); p.actor = actor;
+    const sessions = await accounts.sessions(p); assert.equal(sessions.items.length, 2); assert.equal(sessions.items.filter(s => s.current).length, 1); assert(!JSON.stringify(sessions).includes('tokenHash'));
+    await accounts.revoke(p); await auth.authenticate(one.accessToken); await assert.rejects(() => auth.authenticate(two.accessToken), expect(401)); checks.push('Session list exposes no secrets; revoke others keeps only current session');
+    await assert.rejects(() => accounts.password(p, { currentPassword: 'wrong password', newPassword: 'A new fictional password!' }), expect(403)); await auth.authenticate(one.accessToken);
+    await accounts.password(p, { currentPassword: password, newPassword: 'A new fictional password!' });
+    await assert.rejects(() => auth.authenticate(one.accessToken), expect(401)); await assert.rejects(() => auth.refresh(one.refreshToken), expect(401));
+    await assert.rejects(() => auth.mobileLogin({ email: patient.email, password }), expect(401)); await auth.mobileLogin({ email: patient.email, password: 'A new fictional password!' }); checks.push('Wrong current password is non-destructive; change invalidates access/refresh and old password');
+    await assert.rejects(() => access.recovery(d, clinic.id, { email: patient.email, verificationNote: 'QA verified in person' }), expect(403));
+    await assert.rejects(() => access.recovery(req(reception), clinic.id, { email: patient.email, verificationNote: 'QA verified in person' }), expect(403));
+    await assert.rejects(() => access.recovery(a, clinic.id, { email: admin.email, verificationNote: 'QA verified in person' }), expect(403)); checks.push('Recovery issuance restricted to admin; admin self/privileged recovery denied');
+    const code = await access.recovery(a, clinic.id, { email: patient.email, verificationNote: 'Fictional QA identity verified in person' });
+    const superseded = await access.recovery(a, clinic.id, { email: patient.email, verificationNote: 'Fictional QA identity verified again' });
+    await assert.rejects(() => recovery.recover({ code: code.code, newPassword: 'Another fictional password!' }), expect(400));
+    const attempts = await Promise.allSettled([1, 2].map(() => recovery.recover({ code: superseded.code, newPassword: 'Another fictional password!' })));
+    assert.equal(attempts.filter(r => r.status === 'fulfilled').length, 1);
+    assert.equal(await db.authSession.count({ where: { userId: patient.id, revokedAt: null } }), 0);
+    await auth.mobileLogin({ email: patient.email, password: 'Another fictional password!' }); checks.push('Recovery supersedes old code, works once under concurrency and revokes every session');
+    const expired = await access.recovery(a, clinic.id, { email: patient.email, verificationNote: 'Fictional QA expiry verification' });
+    await db.accountRecovery.updateMany({ where: { userId: patient.id, usedAt: null }, data: { expiresAt: new Date(0) } });
+    await assert.rejects(() => recovery.recover({ code: expired.code, newPassword: 'Expired code password!' }), expect(400)); checks.push('Expired recovery code rejected');
+    const web = await auth.webLogin({ email: doctor.email, password }); await auth.authenticate(undefined, web.secret);
+    const member = doctor.memberships[0].id;
+    await assert.rejects(() => access.access(d, { clinicId: clinic.id, memberId: member }, { active: false }), expect(403));
+    await assert.rejects(() => access.access(a, { clinicId: clinic.id, memberId: admin.memberships[0].id }, { active: false }), expect(409));
+    await access.access(a, { clinicId: clinic.id, memberId: member }, { active: false });
+    await assert.rejects(() => auth.authenticate(undefined, web.secret), expect(401)); await assert.rejects(() => auth.webLogin({ email: doctor.email, password }), expect(403));
+    await access.access(a, { clinicId: clinic.id, memberId: member }, { active: true }); await auth.webLogin({ email: doctor.email, password }); checks.push('Staff access removal immediately invalidates web sessions; restore permits new login; self-removal denied');
+    const other = await db.clinic.create({ data: { slug: `qa-foreign-${randomUUID()}`, name: 'QA Foreign' } });
+    try { await assert.rejects(() => access.access(a, { clinicId: other.id, memberId: member }, { active: false }), expect(403)); await assert.rejects(() => access.recovery(a, other.id, { email: patient.email, verificationNote: 'QA verification cannot cross clinics' }), expect(403)); } finally { await db.clinic.delete({ where: { id: other.id } }); } checks.push('Cross-clinic account control rejected');
+    assert(await db.auditEvent.count({ where: { actorId: { in: users }, action: 'ACCOUNT_RECOVERED' } })); checks.push('Sensitive account operations write audit events');
+    fs.mkdirSync(output, { recursive: true }); fs.writeFileSync(`${output}/account-checks.json`, JSON.stringify({ recordedAt: new Date().toISOString(), result: 'PASS', checks }, null, 2));
+    console.log(`PASS ${checks.length} account scenario groups`);
+  } finally {
+    assert.equal(await db.user.count({ where: { id: { in: users }, email: { endsWith: '@careslot-qa.invalid' } } }), users.length);
+    await db.accountRecovery.deleteMany({ where: { userId: { in: users } } }); await db.auditEvent.deleteMany({ where: { actorId: { in: users } } }); await db.authSession.deleteMany({ where: { userId: { in: users } } });
+    await db.doctorProfile.deleteMany({ where: { membership: { userId: { in: users } } } }); await db.membership.deleteMany({ where: { userId: { in: users } } }); await db.clinicPatient.deleteMany({ where: { clinicId: clinic.id } }); await db.patientProfile.deleteMany({ where: { userId: { in: users } } }); await db.user.deleteMany({ where: { id: { in: users } } }); await db.clinic.delete({ where: { id: clinic.id } });
+  }
+}
+run().catch(e => { console.error(e.message); process.exitCode = 1; }).finally(() => db.$disconnect());

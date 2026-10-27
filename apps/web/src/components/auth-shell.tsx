@@ -1,0 +1,7 @@
+import Link from 'next/link';
+import { Stethoscope, ContactRound, Users, ArrowUpRight } from 'lucide-react';
+import { Brand } from './brand';
+
+export function AuthShell({ invitation = false, children }: { invitation?: boolean; children: React.ReactNode }) {
+  return <main className="auth-page"><aside className="auth-aside"><Link href="/login" className="brand-link" aria-label="CareSlot clinic sign in"><Brand/></Link><div className="auth-story"><p className="auth-context">The clinic workspace</p><h2>Good care starts<br/>with a connected team.</h2><p>Bring your care team and patient connections into one familiar place.</p><div className="auth-role-list"><div><Stethoscope size={18}/><span>Doctors</span></div><div><ContactRound size={18}/><span>Reception</span></div><div><Users size={18}/><span>Clinic administration</span></div></div></div><div className="auth-patient-note"><strong>Here as a patient?</strong><p>Use the CareSlot Android app to connect with your clinic.</p></div></aside><section className="auth-content"><div className="auth-topline"><span>{invitation ? 'Your clinic invitation' : 'For your clinic team'}</span>{invitation && <Link href="/login">Sign in <ArrowUpRight size={14}/></Link>}</div><div className="auth-panel">{children}</div><p className="auth-footer">{invitation ? 'Your invitation is private and can be accepted once.' : 'Need an account? Ask your clinic administrator for an invitation.'}</p></section></main>;
+}
