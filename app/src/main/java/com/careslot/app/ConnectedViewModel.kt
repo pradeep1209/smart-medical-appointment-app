@@ -216,7 +216,10 @@ class ConnectedViewModel(application: Application) : AndroidViewModel(applicatio
         state.value = previous.copy(loading = previous.session == null, busy = true, error = null)
         worker.execute {
             val session = repository.vault.read()
-            if (session == null) { postHome(ConnectedState(loading = false)); return@execute }
+            if (session == null) {
+                val connectionError = runCatching { ClinicConnection(getApplication()).resolve() }.exceptionOrNull()?.message
+                postHome(ConnectedState(loading = false, error = connectionError)); return@execute
+            }
             val cached = repository.cache.read(session.userId)
             try {
                 val fresh = repository.refreshHome()

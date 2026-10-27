@@ -21,7 +21,7 @@ $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 & icacls.exe $logs '/inheritance:r' '/grant:r' "*$($sid):(OI)(CI)F" '*S-1-5-18:(OI)(CI)F' | Out-Null
 if ($LASTEXITCODE) { throw 'Could not restrict local service logs.' }
 $records=@()
-if (Test-Path -LiteralPath $manifest) { $records=@(@(Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json) | Where-Object { Get-Process -Id $_.processId -ErrorAction SilentlyContinue }) }
+if (Test-Path -LiteralPath $manifest) { $savedRecords=Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json; $records=@($savedRecords | Where-Object { Get-Process -Id $_.processId -ErrorAction SilentlyContinue }) }
 function Launch([string]$name,[string]$entry,[string]$arguments,[string]$directory,[int]$port,[string]$probe) {
  $listener=Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue
  if ($listener) {
@@ -43,6 +43,8 @@ function Launch([string]$name,[string]$entry,[string]$arguments,[string]$directo
 Launch 'api' $apiEntry ('"{0}"' -f $apiEntry) $projectPath 3001 'http://127.0.0.1:3001/api/v1/health'
 Launch 'web' $webEntry ('"{0}" start --hostname 127.0.0.1 --port 3000' -f $webEntry) (Join-Path $projectPath 'apps/web') 3000 'http://127.0.0.1:3000/login'
 $lanSetting=Get-Content -LiteralPath (Join-Path $projectPath '.env') | Select-String '^API_LAN_ADDRESS=([0-9.]+)$' | Select-Object -Last 1
+$lanAutomatic=(Get-Content -LiteralPath (Join-Path $projectPath '.env')) -contains 'API_LAN_ADDRESS=auto'
 $lanEnabled=Get-Content -LiteralPath (Join-Path $projectPath '.env') | Select-String '^ALLOW_LAN_DEV=true\s*$'
-if ($lanSetting -and $lanEnabled) { Write-Output "CareSlot dashboard: http://127.0.0.1:3000/login. Mobile Wi-Fi API: http://$($lanSetting.Matches[0].Groups[1].Value):3001/api/v1. Keep both devices on the same trusted Wi-Fi; no USB forwarding is needed for the Wi-Fi APK." }
+if ($lanAutomatic -and $lanEnabled) { Write-Output 'CareSlot dashboard: http://127.0.0.1:3000/login. Local discovery is enabled. Use Clinic connection in CareSlot on an approved trusted Wi-Fi/hotspot adapter; no USB forwarding is needed.' }
+elseif ($lanSetting -and $lanEnabled) { Write-Output "CareSlot dashboard: http://127.0.0.1:3000/login. Mobile Wi-Fi API: http://$($lanSetting.Matches[0].Groups[1].Value):3001/api/v1. Keep both devices on the same trusted Wi-Fi; no USB forwarding is needed for the Wi-Fi APK." }
 else { Write-Output 'CareSlot is local only. Dashboard: http://127.0.0.1:3000/login. Phone forwarding: adb reverse tcp:3001 tcp:3001.' }

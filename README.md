@@ -8,6 +8,8 @@ CareSlot now has a shared account and clinic-directory foundation: a Kotlin pati
 
 ## Shared local version
 
+**Local discovery (1.7.0):** one APK can find its clinic on trusted shared Wi-Fi or a hotspot, save the server identity and reconnect after an IP change. **Clinic connection** is available on sign-in and Account, with discovery, server selection and a manual fallback. Router Wi-Fi and a phone-hosted hotspot were directly tested on the physical iQOO phone; the laptop-hosted hotspot path remains pending. Use the updated network setup in step 5; no per-IP APK rebuild is needed.
+
 Implemented: patient registration and login, encrypted mobile sessions, clinic staff login, administrator-created doctor/receptionist invitations, clinic-scoped patient registrations, doctor directories, logout, and an account-scoped Room directory cache. Clinic staff and patients use individual accounts in the same identity database. The API checks roles and clinic ownership on every protected request; neither client connects directly to PostgreSQL.
 
 The patient app and clinic dashboard share the taste skill's Accent ladder direction: bundled DM Sans, forest-green accents, pale mint surfaces, clearer forms and identity rows. The native app has labelled bottom navigation and read-only doctor profiles; the web workspace has responsive navigation and searchable directories. Counts and directory entries come from PostgreSQL. See DESIGN.md for the shared system and visual-review evidence.
@@ -144,7 +146,7 @@ Both commands must succeed. Open `http://localhost:3000/login` and sign in with 
 
 ### 5. Configure this computer's trusted Wi-Fi
 
-Connect the computer and phone to the same trusted Wi-Fi. In the computer's Wi-Fi properties or `ipconfig`, find the **Wi-Fi adapter's IPv4 address**. Do not reuse `192.168.0.3` from this project's earlier test setup unless it is actually assigned to the new computer.
+Connect the computer and phone to the same trusted local network. Both may use a router, the phone may provide a hotspot to the computer, or the computer may provide a mobile hotspot to the phone. Enable the hotspot and connect the other device before running setup so its adapter can be detected.
 
 Stop CareSlot's helper-managed API/dashboard:
 
@@ -152,13 +154,13 @@ Stop CareSlot's helper-managed API/dashboard:
 .\tools\stop-local.ps1
 ```
 
-Open **PowerShell as administrator**, change to the project folder, and run the following with the actual Wi-Fi address (the sample below is only an example):
+Open **PowerShell as administrator**, change to the project folder, and run:
 
 ```powershell
-.\tools\configure-wifi.ps1 -Address 192.168.1.20 -TrustPrivateNetwork
+.\tools\configure-wifi.ps1 -TrustPrivateNetwork
 ```
 
-Use `-TrustPrivateNetwork` only for a trusted private network. The helper targets an interface named `Wi-Fi`; a differently named interface or Ethernet setup needs the script adapted before using it. It updates this computer's `.env`, creates `.local/android-wifi.properties`, and adds a scoped Private/local-subnet firewall rule for the API. PostgreSQL stays local. Return to the standard project terminal:
+Use `-TrustPrivateNetwork` only for a trusted network. The helper detects active Wi-Fi/Wi-Fi Direct adapters, records their names rather than a fixed IP, and adds Private/local-subnet firewall rules for TCP 3001 (API) and UDP 3002/5353 (local discovery), scoped to Node and those adapters. PostgreSQL and the web dashboard stay local. A specific adapter can be selected with `-InterfaceAlias 'Wi-Fi'`; multiple names are accepted, including the actual adapter name Windows uses for Mobile Hotspot. `-Address YOUR_CURRENT_IPV4` remains supported to identify one adapter. The script prints its current clinic address for manual connection. Return to the standard project terminal:
 
 ```powershell
 .\tools\start-local.ps1
@@ -175,11 +177,17 @@ Open the extracted project in Android Studio, let it locate/configure the Androi
 .\gradlew.bat assembleDebug
 ```
 
-The Wi-Fi URL is read from the local properties file created in step 5. The resulting APK is **`app/build/outputs/apk/debug/app-debug.apk`**. Rebuild for the friend's computer; an APK shared from the original machine still contains the original API address. If the Wi-Fi address changes later, repeat step 5 and rebuild/reinstall.
+The resulting APK is **`app/build/outputs/apk/debug/app-debug.apk`**. CareSlot 1.7 discovers the backend at runtime; this APK can be shared between computers without rebuilding for each IP. An old configured URL is only a starting hint. A new installation automatically selects a single reachable server; if several are found, use **Clinic connection** on the sign-in screen (also available under Account) to select yours. It remembers a signed server identity and rediscovers the same installation when its IP changes. Choosing a different server requires signing out first. An existing session upgrading from an old APK must first reach its original configured address to establish the identity, or explicitly sign out before choosing another connection.
+
+Discovery combines mDNS/DNS-SD and a bounded local UDP broadcast fallback for hotspots. If discovery is blocked, use **Clinic connection → Enter an address** with the computer's current address. Network isolation can block even manual communication. Connect only to trusted local networks: the development APK allows private-IP HTTP through an application URL allowlist; release builds continue to require HTTPS. Server identity pinning prevents accidental cross-server session forwarding; it does not encrypt development HTTP traffic. Rotating the server's JWT signing secret also changes its discovery identity, requiring sign-out and reselection.
+
+On an already-approved adapter, DHCP address changes are followed without restarting the API or rebuilding the APK. If switching to a new adapter (for example, first enabling Windows Mobile Hotspot), rerun step 5 to approve it. Each new Windows network must be marked Private before its scoped firewall rules apply. Physical router, phone-hotspot and laptop-hotspot operation must still be checked on the target hardware; a successful build or computer-only probe is not that validation.
 
 ### 7. Install on the physical phone
 
-Enable Developer options and USB debugging, connect a data-capable USB cable, unlock the phone, and accept its debugging prompt. With the default Android SDK installation:
+For a manual installation, send `app/build/outputs/apk/debug/app-debug.apk` to the phone, open it and allow installation from the selected file manager/browser. No USB debugging is required for that method.
+
+Alternatively, enable Developer options and USB debugging, connect a data-capable USB cable, unlock the phone, and accept its debugging prompt. With the default Android SDK installation:
 
 ```powershell
 & "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" devices
@@ -217,7 +225,7 @@ This stops only helper-managed API/dashboard processes, leaving the global Postg
 | Missing table or permission error | Successful initializer completion, correct generated connection URLs and owner-role migrations. |
 | JWT configuration rejected | The initializer generates it; check that the private `.env` was preserved and no template replaced it. |
 | Port already occupied/unexpected health response | Identify the listener on 3000/3001; stop/reconfigure only a service you own. |
-| Phone says clinic cannot be reached | Same Wi-Fi, current IPv4, rebuilt APK, running API, Private firewall rule, computer awake; guest/client isolation can block access. |
+| Phone says clinic cannot be reached | Shared local network/hotspot, running updated API, approved adapter, Private firewall rules and awake computer. Open Clinic connection and search, or check its printed current address manually; isolation can block both. |
 | ADB unauthorized/no device | Unlock/allow debugging, check cable/drivers and SDK Platform-Tools. |
 | Cannot run PowerShell scripts | Process-scoped execution policy if permitted, or ask the machine administrator. |
 | Empty doctor directory/no slots | Accept a doctor invitation, configure working hours, and check the clinic date/time zone. |
@@ -299,7 +307,7 @@ adb -s YOUR_SERIAL install -r output/apk/CareSlot-identity.apk
 
 Open CareSlot and choose **Create a patient account** for a new identity. Use a fictional name and email with a password of at least 12 characters. Staff accounts sign in on the web dashboard. Install as an update; uninstalling would delete local records. An intentionally built loopback APK still requires `adb reverse tcp:3001 tcp:3001`; the Wi-Fi APK does not.
 
-To rebuild: `.\gradlew.bat assembleDebug`. The ignored `.local/android-wifi.properties` retains this computer's Wi-Fi endpoint; `-PcareslotApiUrl=...` overrides it. The original output is `app/build/outputs/apk/debug/app-debug.apk`. Packaged copies on the original computer are [CareSlot-identity.apk](output/apk/CareSlot-identity.apk) and [CareSlot-1.6.1-WiFi.apk](output/apk/CareSlot-1.6.1-WiFi.apk); a fresh ZIP recipient builds their own APK in step 6. Debug builds permit HTTP only for the generated selected host. A deployed release requires an HTTPS API URL via `-PcareslotReleaseApiUrl=https://YOUR_HOST/api/v1` and proper release signing.
+To rebuild: `.\gradlew.bat assembleDebug`. The ignored `.local/android-wifi.properties` and `-PcareslotApiUrl=...` supply a starting hint for older sessions; CareSlot 1.7 saves and discovers its selected server at runtime. The original output is `app/build/outputs/apk/debug/app-debug.apk`. The current discovery APK is [CareSlot-1.7.0-Local.apk](output/apk/CareSlot-1.7.0-Local.apk). Debug builds permit changing private-IP HTTP endpoints through the app's URL validation. A deployed release requires an HTTPS API URL via `-PcareslotReleaseApiUrl=https://YOUR_HOST/api/v1` and proper release signing.
 
 ### Your manual acceptance checks
 

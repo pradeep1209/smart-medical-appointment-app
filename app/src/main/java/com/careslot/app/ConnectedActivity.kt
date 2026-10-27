@@ -28,6 +28,7 @@ class ConnectedActivity : ComponentActivity() {
     private val vm: ConnectedViewModel by viewModels()
     private val ui by lazy { UiKit(this) }
     private var warning: AlertDialog? = null
+    private val clinicConnectionResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result -> if (result.resultCode == RESULT_OK) vm.load() }
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { allowed -> vm.reminders(allowed) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,6 +58,11 @@ class ConnectedActivity : ComponentActivity() {
                     dialog.show()
                 }
         }
+    }
+    override fun onResume() {
+        super.onResume()
+        val current = vm.state.value
+        if (current?.session != null && !current.loading && !current.busy && !current.bookingBusy && !current.careBusy) vm.load()
     }
     override fun onNewIntent(value: android.content.Intent) {
         super.onNewIntent(value); intent = value
@@ -198,12 +204,11 @@ class ConnectedActivity : ComponentActivity() {
         ui.gap(content, 6)
         content.addView(ui.text("Doctors and clinic staff use the clinic web workspace.", 12f, CareTokens.muted).apply { gravity = Gravity.CENTER })
         if (!state.register) content.addView(ui.button("Recover account", 2) { credentialsDialog("Recover account", recovery = true) }.apply { isEnabled = !state.busy })
-        if (BuildConfig.DEBUG) content.addView(ui.button("Connection help", 2) {
-            val loopback = java.net.URI(BuildConfig.API_BASE_URL).host in listOf("127.0.0.1", "localhost")
-            val instructions = if (loopback) "Keep the clinic API running on your computer and connect the phone by USB. Forward the connection with:\nadb reverse tcp:3001 tcp:3001" else "Connect this phone and the clinic computer to the same trusted Wi-Fi. Keep the computer awake and the clinic API running. USB is not required. If the computer's Wi-Fi address changes, the clinic connection needs updating."
-            AlertDialog.Builder(this).setTitle("Connect to your clinic").setMessage("This development app connects to:\n${BuildConfig.API_BASE_URL}\n\n$instructions").setPositiveButton("Close", null).show()
-        }.apply { textSize = 12f })
+        ClinicConnection(this).saved()?.let { content.addView(ui.text("Clinic server: ${it.name}", 12f, CareTokens.muted)) }
+        content.addView(ui.button("Clinic connection", 2) { openClinicConnection() }.apply { isEnabled = !state.busy })
     }
+
+    private fun openClinicConnection() { clinicConnectionResult.launch(android.content.Intent(this, ClinicConnectionActivity::class.java)) }
 
     private fun notice(content: LinearLayout, state: ConnectedState) {
         state.error?.let { message ->
@@ -289,6 +294,7 @@ class ConnectedActivity : ComponentActivity() {
     private fun account(content: LinearLayout, state: ConnectedState) {
         val user = JSONObject(state.session!!.userJson)
         ui.heading(content, "Your account", "Your patient identity and clinic connection.")
+        content.addView(ui.button("Clinic connection", 1) { openClinicConnection() }.apply { isEnabled = !state.busy })
         ui.card(content) {
             addView(ui.row().apply {
                 addView(ui.avatar(user.getString("displayName"), 56))

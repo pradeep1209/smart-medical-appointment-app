@@ -11,7 +11,7 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-data class ConnectedSession(val userId: String, val accessToken: String, val refreshToken: String, val userJson: String)
+data class ConnectedSession(val userId: String, val accessToken: String, val refreshToken: String, val userJson: String, val serverId: String? = null)
 
 /** Session secrets are encrypted by a non-exportable Android Keystore key. */
 class SessionVault(context: Context) {
@@ -30,11 +30,12 @@ class SessionVault(context: Context) {
             val parts = encrypted.split(":")
             val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, Base64.decode(parts[0], Base64.NO_WRAP))) }
             val json = JSONObject(String(cipher.doFinal(Base64.decode(parts[1], Base64.NO_WRAP)), Charsets.UTF_8))
-            ConnectedSession(json.getString("userId"), json.getString("accessToken"), json.getString("refreshToken"), json.getString("userJson"))
+            ConnectedSession(json.getString("userId"), json.getString("accessToken"), json.getString("refreshToken"), json.getString("userJson"), json.optString("serverId").takeIf { it.isNotBlank() && it != "null" })
         } catch (_: Exception) { prefs.edit().remove("encrypted").commit(); null }
     }
     fun save(session: ConnectedSession) = synchronized(lock) {
         val json = JSONObject().put("userId", session.userId).put("accessToken", session.accessToken).put("refreshToken", session.refreshToken).put("userJson", session.userJson)
+        session.serverId?.let { json.put("serverId", it) }
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, key()) }
         val value = Base64.encodeToString(cipher.iv, Base64.NO_WRAP)+":"+Base64.encodeToString(cipher.doFinal(json.toString().toByteArray(Charsets.UTF_8)), Base64.NO_WRAP)
         check(prefs.edit().putString("encrypted", value).commit()) { "Session could not be saved securely." }

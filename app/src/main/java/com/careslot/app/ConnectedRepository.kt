@@ -13,8 +13,12 @@ class ConnectedRepository(private val context: Context) {
     val cache = ConnectedDatabase.get(context).cache()
     private val clinical = ConnectedDatabase.get(context).clinical()
     private fun clearAccount(userId: String) { cache.delete(userId); clinical.delete(userId); ConnectedReminders.clear(context, userId); MedicationReminders.clear(context, userId); java.io.File(context.cacheDir, "exports/$userId").deleteRecursively() }
-    private fun request(path: String, body: JSONObject? = null, access: String? = null): JSONObject {
-        val connection = URL(BuildConfig.API_BASE_URL.trimEnd('/')+path).openConnection() as HttpURLConnection
+    private fun request(path: String, body: JSONObject? = null, access: String? = null, expectedServer: String? = null): JSONObject {
+        val clinic = ClinicConnection(context)
+        val base = clinic.resolve()
+        val destination = clinic.saved() ?: throw IOException("Choose your clinic connection first.")
+        if (destination.url != base || (expectedServer != null && destination.id != expectedServer)) throw IOException("The clinic connection changed. Your session was not sent.")
+        val connection = URL(base+path).openConnection() as HttpURLConnection
         try {
             connection.requestMethod = if (body == null) "GET" else "POST"
             connection.connectTimeout = 10000; connection.readTimeout = 15000
@@ -36,12 +40,12 @@ class ConnectedRepository(private val context: Context) {
                 val message = when (val value = json.opt("message")) { is JSONArray -> (0 until value.length()).joinToString(" ") { value.getString(it) }; is String -> value; else -> "The clinic could not complete this request." }
                 throw ClinicApiException(status, message)
             }
-            return json
+            return json.put("_connectionServerId", destination.id)
         } finally { connection.disconnect() }
     }
     private fun parseSession(json: JSONObject): ConnectedSession {
         val user = json.getJSONObject("user")
-        return ConnectedSession(user.getString("id"), json.getString("accessToken"), json.getString("refreshToken"), user.toString())
+        return ConnectedSession(user.getString("id"), json.getString("accessToken"), json.getString("refreshToken"), user.toString(), json.getString("_connectionServerId"))
     }
     fun signIn(email: String, password: String, name: String? = null): ConnectedSession {
         val data = JSONObject().put("email", email.trim()).put("password", password)
@@ -64,19 +68,19 @@ class ConnectedRepository(private val context: Context) {
     }
     private fun authorizedInternal(path: String, body: JSONObject? = null): JSONObject {
         val original = vault.read() ?: throw ClinicApiException(401, "Sign in to continue.")
-        return try { request(path, body, original.accessToken) }
+        return try { request(path, body, original.accessToken, original.serverId) }
         catch (error: ClinicApiException) {
             if (error.status != 401) throw error
             val current = synchronized(SessionVault.lock) {
                 val saved = vault.read() ?: throw ClinicApiException(401, "Sign in again.")
                 if (saved.userId != original.userId) throw ClinicApiException(401, "Your account has changed. Sign in again.")
                 if (saved.accessToken != original.accessToken) saved
-                else parseSession(request("/auth/mobile/refresh", JSONObject().put("refreshToken", saved.refreshToken))).also {
+                else parseSession(request("/auth/mobile/refresh", JSONObject().put("refreshToken", saved.refreshToken), expectedServer = saved.serverId)).also {
                     if (it.userId != saved.userId) throw ClinicApiException(403, "Your account could not be refreshed securely. Sign in again.")
                     vault.save(it)
                 }
             }
-            request(path, body, current.accessToken)
+            request(path, body, current.accessToken, current.serverId)
         }
     }
     private fun clinicalRead(kind: String, path: String, cursor: String?): JSONObject {

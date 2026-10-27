@@ -7,6 +7,7 @@ plugins {
     id("org.jetbrains.kotlin.kapt")
 }
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     implementation("androidx.activity:activity-ktx:1.10.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-savedstate:2.8.7")
     implementation("androidx.room:room-runtime:2.7.2")
@@ -33,8 +34,8 @@ val generateDebugClinicNetwork by tasks.registering {
         xml.parentFile.mkdirs()
         xml.writeText("""<?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <base-config cleartextTrafficPermitted="false"><trust-anchors><certificates src="system" /></trust-anchors></base-config>
-    <domain-config cleartextTrafficPermitted="true"><domain>$host</domain></domain-config>
+    <!-- Debug LAN discovery needs changing IPs. ClinicAddress rejects public HTTP destinations. -->
+    <base-config cleartextTrafficPermitted="true"><trust-anchors><certificates src="system" /></trust-anchors></base-config>
 </network-security-config>
 """)
     }
@@ -48,8 +49,8 @@ android {
         applicationId = "com.careslot.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 226
-        versionName = "1.6.1"
+        versionCode = 227
+        versionName = "1.7.0"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

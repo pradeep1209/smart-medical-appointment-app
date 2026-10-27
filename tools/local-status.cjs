@@ -11,10 +11,14 @@ async function main() {
  const web = await fetch('http://127.0.0.1:3000/login', { signal: AbortSignal.timeout(10000) }); if (!web.ok) throw Error('Local clinic dashboard is unavailable.');
  let wifi = { enabled: false };
  if (process.env.ALLOW_LAN_DEV === 'true') {
-  const address = process.env.API_LAN_ADDRESS;
-  const response = await fetch(`http://${address}:${process.env.API_PORT || 3001}/api/v1/health`, { signal: AbortSignal.timeout(5000) });
-  if (!response.ok || (await response.json()).service !== 'CareSlot API') throw Error('Configured Wi-Fi API address is unavailable. Check the address and restart the API.');
-  wifi = { enabled: true, address, reachableFromComputer: true, phoneVerification: 'See qa/shared/wifi-sync/report.json; a computer probe does not verify the phone path.' };
+  const { approvedInterfaces } = require('../apps/api/dist/local-network');
+  const addresses = approvedInterfaces(process.env).map(n => n.address);
+  if (!addresses.length) throw Error('No approved local network is connected. Connect Wi-Fi/hotspot or configure its adapter.');
+  for (const address of addresses) {
+   const response = await fetch(`http://${address}:${process.env.API_PORT || 3001}/api/v1/health`, { signal: AbortSignal.timeout(5000) });
+   if (!response.ok || (await response.json()).service !== 'CareSlot API') throw Error('A configured local API address is unavailable. Check the network and restart the API.');
+  }
+  wifi = { enabled: true, addresses, reachableFromComputer: true, phoneVerification: 'A computer probe does not verify phone or hotspot discovery.' };
  }
  const report = { recordedAt: new Date().toISOString(), result: 'PASS', database: db, api: { reachable: true, noStore: api.headers.get('cache-control') === 'no-store', nosniff: api.headers.get('x-content-type-options') === 'nosniff' }, wifi, web: { reachable: true, frameProtection: web.headers.get('x-frame-options'), noStore: web.headers.get('cache-control')?.includes('no-store') }, publicDeployment: false };
  if (!report.api.noStore || !report.api.nosniff || !report.web.noStore || report.web.frameProtection !== 'DENY') throw Error('Expected response security headers are missing.');

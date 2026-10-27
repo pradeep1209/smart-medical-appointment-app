@@ -22,11 +22,14 @@ import { AccountController, AccessController, RecoveryController } from './accou
 import { PatientPrescriptionsController, DoctorPrescriptionsController } from './prescriptions.controller';
 import { ExperienceController, VerificationController } from './experience.controller';
 import { ExperienceService } from './experience.service';
+import { ConnectionController } from './connection.controller';
+import { LocalDiscovery } from './local-discovery';
+import { approvedInterfaces } from './local-network';
 
 @Module({
   imports: [JwtModule.register({ secret: process.env.JWT_SECRET })],
-  controllers: [AuthController, ClinicController, HealthController, PatientController, AvailabilityController, PatientAvailabilityController, PatientAppointmentsController, ClinicAppointmentsController, PatientPrescriptionsController, DoctorPrescriptionsController, AccountController, AccessController, RecoveryController, PredictionController, ExperienceController, VerificationController],
-  providers: [PrismaService, AuthService, AuthGuard, AppointmentsService, PrescriptionsService, AttendanceService, AttendanceModel, ExperienceService],
+  controllers: [AuthController, ClinicController, HealthController, PatientController, AvailabilityController, PatientAvailabilityController, PatientAppointmentsController, ClinicAppointmentsController, PatientPrescriptionsController, DoctorPrescriptionsController, AccountController, AccessController, RecoveryController, PredictionController, ExperienceController, VerificationController, ConnectionController],
+  providers: [PrismaService, AuthService, AuthGuard, AppointmentsService, PrescriptionsService, AttendanceService, AttendanceModel, ExperienceService, LocalDiscovery],
 })
 class AppModule {}
 
@@ -40,14 +43,13 @@ async function bootstrap() {
   // Keep a small global parser for all other JSON endpoints.
   app.use(json({ limit: '100kb' }));
   app.use('/api/v1/verify', rateLimit({ windowMs: 60000, limit: 60, standardHeaders: 'draft-8', legacyHeaders: false }));
+  app.use('/api/v1/connection', rateLimit({ windowMs: 60000, limit: 120, standardHeaders: 'draft-8', legacyHeaders: false }));
   if (process.env.ALLOW_LAN_DEV === 'true') {
-    const { networkInterfaces } = await import('node:os');
-    const address = process.env.API_LAN_ADDRESS!;
-    if (!Object.values(networkInterfaces()).flat().some(n => n?.address === address)) throw Error('Configured Wi-Fi address is not assigned to this computer. Reconfigure Wi-Fi access.');
+    if (process.env.API_LAN_ADDRESS !== 'auto' && !approvedInterfaces(process.env).length) throw Error('Configured Wi-Fi address is not assigned to this computer. Reconfigure Wi-Fi access.');
     // Keep loopback access for the dashboard; reject the computer's other network interfaces.
     app.use((req: { socket: { localAddress?: string } }, res: { status: (code: number) => { json: (body: unknown) => void } }, next: () => void) => {
       const local = req.socket.localAddress?.replace(/^::ffff:/, '');
-      if (local !== address && local !== '127.0.0.1' && local !== '::1') return res.status(403).json({ message: 'Use the configured clinic Wi-Fi connection.' });
+      if (local !== '127.0.0.1' && local !== '::1' && !approvedInterfaces(process.env).some(n => n.address === local)) return res.status(403).json({ message: 'Use the configured clinic Wi-Fi connection.' });
       next();
     });
   }

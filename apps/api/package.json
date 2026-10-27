@@ -20,6 +20,7 @@
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
     "argon2": "0.45.1",
+    "bonjour-service": "1.4.4",
     "class-transformer": "0.5.1",
     "class-validator": "0.14.2",
     "cookie-parser": "1.4.7",

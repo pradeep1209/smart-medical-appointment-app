@@ -18,6 +18,10 @@ export function validateEnvironment(env: NodeJS.ProcessEnv) {
     if (env.ALLOW_LAN_DEV === 'true') throw Error('Development Wi-Fi mode cannot be enabled in production.');
     if (env.COOKIE_SECURE !== 'true' || origin.protocol !== 'https:') throw Error('Production requires HTTPS and secure cookies.');
   } else if (env.ALLOW_LAN_DEV === 'true') {
-    if (env.API_HOST !== '0.0.0.0' || !isPrivateIpv4(env.API_LAN_ADDRESS ?? '')) throw Error('Development Wi-Fi mode requires API_HOST=0.0.0.0 and a private IPv4 API_LAN_ADDRESS.');
+    let automatic = false;
+    if (env.API_LAN_ADDRESS === 'auto') {
+      try { const aliases = JSON.parse(env.API_LAN_INTERFACES ?? 'null'); automatic = Array.isArray(aliases) && aliases.length > 0 && aliases.length <= 8 && aliases.every(a => typeof a === 'string' && a.trim().length > 0 && a.length <= 128); } catch {}
+    }
+    if (env.API_HOST !== '0.0.0.0' || (!automatic && !isPrivateIpv4(env.API_LAN_ADDRESS ?? ''))) throw Error('Development Wi-Fi mode requires API_HOST=0.0.0.0 and a private IPv4 address or auto with approved interface names.');
   } else if (!['127.0.0.1', 'localhost', '::1'].includes(env.API_HOST ?? '127.0.0.1')) throw Error('Local development API must bind to loopback unless Wi-Fi mode is explicitly configured.');
 }
